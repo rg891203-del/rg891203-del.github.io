@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>虎頭蜂螫傷急救導航</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang TC',sans-serif;background:#f5f5f7;padding:12px;max-width:420px;margin:0 auto;}
+h1{font-size:18px;font-weight:700;color:#1c1c1e;margin-bottom:3px;}
+.subtitle{font-size:12px;color:#8e8e93;margin-bottom:12px;}
+
+/* 頁籤 */
+.tab-bar{display:flex;border:1px solid #e5e5ea;border-radius:10px;overflow:hidden;margin-bottom:12px;background:#fff;}
+.tab-btn{flex:1;padding:9px 2px;font-size:12px;background:#fff;border:none;cursor:pointer;color:#8e8e93;display:flex;align-items:center;justify-content:center;gap:4px;border-right:1px solid #e5e5ea;}
+.tab-btn:last-child{border-right:none;}
+.tab-btn.active{background:#f2f2f7;color:#1c1c1e;font-weight:700;}
+.panel{display:none;}
+.panel.active{display:block;}
+
+/* 按鈕 */
+.call-btn{display:flex;align-items:center;justify-content:center;gap:8px;background:#c0392b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;width:100%;margin-bottom:10px;text-decoration:none;}
+
+/* 過敏警示 */
+.shock-box{background:#c0392b;border-radius:12px;padding:12px 14px;margin-bottom:10px;color:#fff;}
+.shock-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+.shock-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.shock-item{background:rgba(255,255,255,.18);border-radius:8px;padding:7px 10px;font-size:12px;display:flex;align-items:center;gap:6px;line-height:1.4;}
+.shock-item i{font-size:15px;flex-shrink:0;}
+
+/* 一般資訊框 */
+.info-box{background:#fff;border:1px solid #e5e5ea;border-radius:12px;padding:12px 14px;margin-bottom:10px;}
+.info-title{font-size:13px;font-weight:700;color:#1c1c1e;display:flex;align-items:center;gap:6px;margin-bottom:10px;}
+.alert-box{background:#fde8e8;border:1px solid #f1948a;border-radius:12px;padding:12px 14px;margin-bottom:10px;}
+.alert-title{font-size:13px;font-weight:700;color:#7b241c;display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+.alert-list{list-style:none;display:flex;flex-direction:column;gap:5px;}
+.alert-list li{font-size:13px;color:#922b21;display:flex;gap:7px;align-items:flex-start;line-height:1.5;}
+.dot{flex-shrink:0;margin-top:5px;width:5px;height:5px;border-radius:50%;background:#c0392b;}
+
+/* 步驟 */
+.step-item{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;}
+.step-item:last-child{margin-bottom:0;}
+.step-num{width:22px;height:22px;border-radius:50%;background:#fff3cd;color:#856404;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.step-text{font-size:13px;color:#1c1c1e;line-height:1.6;}
+.step-sub{font-size:11px;color:#8e8e93;margin-top:2px;}
+
+/* 知識卡片 */
+.know-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:0;}
+.know-card{background:#fff;border:1px solid #e5e5ea;border-radius:10px;padding:10px 12px;}
+.know-card-title{font-size:12px;font-weight:700;color:#1c1c1e;margin-bottom:5px;display:flex;align-items:center;gap:5px;}
+.know-card-title i{font-size:14px;}
+.know-card p{font-size:11px;color:#3c3c43;line-height:1.6;}
+.warn-card{background:#fff8e1;border:1px solid #ffcc02;}
+
+/* 定位列 */
+.loc-bar{background:#f2f2f7;border:1px solid #e5e5ea;border-radius:12px;padding:10px 12px;margin-bottom:8px;}
+.loc-row{display:flex;align-items:center;gap:8px;}
+#loc-text{flex:1;font-size:13px;color:#1c1c1e;line-height:1.4;}
+.gps-btn{font-size:12px;background:#e8f4fd;color:#1a73e8;border:none;border-radius:8px;padding:7px 10px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px;font-weight:600;flex-shrink:0;}
+.gps-btn:disabled{opacity:.6;cursor:not-allowed;}
+.manual-row{display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid #e5e5ea;}
+.manual-label{font-size:12px;color:#8e8e93;white-space:nowrap;}
+#town-select{flex:1;border:1px solid #e5e5ea;border-radius:8px;padding:6px 8px;font-size:13px;background:#fff;color:#1c1c1e;}
+.manual-btn{font-size:12px;background:#f2f2f7;border:1px solid #e5e5ea;color:#1c1c1e;border-radius:8px;padding:7px 10px;cursor:pointer;font-weight:600;}
+.loc-badge{font-size:11px;padding:3px 9px;border-radius:99px;background:#d4edda;color:#155724;margin-top:6px;display:inline-block;}
+
+/* 權限指引 */
+.perm-guide{background:#fff8e1;border:1px solid #ffcc02;border-radius:10px;padding:12px 14px;margin-top:8px;}
+.perm-guide-title{font-size:13px;font-weight:700;color:#7d5a00;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.perm-steps{list-style:none;display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
+.perm-steps li{font-size:12px;color:#7d5a00;display:flex;gap:7px;align-items:flex-start;line-height:1.5;}
+.perm-step-num{width:18px;height:18px;border-radius:50%;background:#ffcc02;color:#1c1c1e;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.perm-close-btn{font-size:12px;background:#ffcc02;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;color:#1c1c1e;font-weight:600;}
+
+/* 搜尋 */
+.search-wrap{position:relative;margin-bottom:10px;}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:15px;color:#8e8e93;pointer-events:none;}
+#search{width:100%;padding:9px 10px 9px 32px;border:1px solid #e5e5ea;border-radius:10px;font-size:14px;background:#fff;color:#1c1c1e;}
+
+/* 醫院卡片 */
+.count-lbl{font-size:12px;color:#8e8e93;margin-bottom:8px;}
+.hosp-list{display:flex;flex-direction:column;gap:8px;}
+.hosp-card{background:#fff;border:1px solid #e5e5ea;border-radius:12px;padding:11px 12px;}
+.hosp-top{display:flex;align-items:center;gap:10px;}
+.hosp-ico{width:36px;height:36px;border-radius:9px;background:#fff3e0;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.hosp-ico i{font-size:18px;color:#e65100;}
+.hosp-info{flex:1;min-width:0;}
+.hosp-name{font-size:13px;font-weight:700;color:#1c1c1e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hosp-addr{font-size:11px;color:#8e8e93;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hosp-right{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;}
+.dist{font-size:11px;color:#8e8e93;}
+.nav-link{display:inline-flex;align-items:center;gap:4px;background:#1a73e8;color:#fff;text-decoration:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:600;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
+.nav-link i{font-size:13px;}
+.empty{text-align:center;padding:2rem 1rem;color:#8e8e93;font-size:14px;}
+</style>
+</head>
+<body>
+
+<h1>🐝 虎頭蜂螫傷急救導航</h1>
+<p class="subtitle">緊急處置 · 過敏辨識 · 就近導航</p>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('aid')" id="tab-aid"><i class="ti ti-first-aid-kit"></i>緊急處置</button>
+  <button class="tab-btn" onclick="switchTab('know')" id="tab-know"><i class="ti ti-alert-triangle"></i>過敏辨識</button>
+  <button class="tab-btn" onclick="switchTab('hosp')" id="tab-hosp"><i class="ti ti-building-hospital"></i>醫院導航</button>
+</div>
+
+<!-- ══ 緊急處置 ══ -->
+<div class="panel active" id="panel-aid">
+  <a class="call-btn" href="tel:119"><i class="ti ti-phone-call"></i>立即撥打 119 送醫</a>
+
+  <!-- 過敏性休克警示 -->
+  <div class="shock-box">
+    <div class="shock-title"><i class="ti ti-alert-octagon"></i>出現以下症狀請立即撥 119！</div>
+    <div class="shock-grid">
+      <div class="shock-item"><i class="ti ti-lungs"></i>呼吸困難／喘鳴</div>
+      <div class="shock-item"><i class="ti ti-mood-sick"></i>全身蕁麻疹／皮膚潮紅</div>
+      <div class="shock-item"><i class="ti ti-face-id-error"></i>臉部／嘴唇腫脹</div>
+      <div class="shock-item"><i class="ti ti-heart-broken"></i>心跳加速／血壓下降</div>
+      <div class="shock-item"><i class="ti ti-dizzy"></i>頭暈／失去意識</div>
+      <div class="shock-item"><i class="ti ti-urgent"></i>噁心嘔吐／大量螫傷</div>
+    </div>
+  </div>
+
+  <!-- 禁止事項 -->
+  <div class="alert-box">
+    <div class="alert-title"><i class="ti ti-circle-x"></i>絕對不可以做的事</div>
+    <ul class="alert-list">
+      <li><span class="dot"></span>不可用嘴吸螫傷處或用手擠壓（會加速毒素擴散）</li>
+      <li><span class="dot"></span>不可奔跑逃跑（會引發蜂群追擊）</li>
+      <li><span class="dot"></span>不可揮手拍打蜜蜂或虎頭蜂</li>
+      <li><span class="dot"></span>不可忽視症狀，即使當下感覺輕微</li>
+      <li><span class="dot"></span>不可自行使用止痛藥後即停止觀察</li>
+    </ul>
+  </div>
+
+  <!-- 正確步驟 -->
+  <div class="info-box">
+    <div class="info-title"><i class="ti ti-list-check" style="color:#e65100"></i>正確緊急處置步驟</div>
+    <div class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-text">立即離開蜂群區域，勿奔跑
+        <div class="step-sub">用衣物或包包遮住頭臉，快步直線遠離，躲入建築物或車內</div>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-text">若有蜂針殘留，用信用卡邊緣輕刮取出
+        <div class="step-sub">虎頭蜂通常不留針；蜜蜂才會留針，切勿用手夾捏（會擠出更多毒液）</div>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-text">以大量清水沖洗螫傷處 10 分鐘，再冰敷
+        <div class="step-sub">降低局部腫脹與疼痛，不可熱敷</div>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">4</div>
+      <div class="step-text">記錄螫傷時間、部位、螫針數量
+        <div class="step-sub">10 針以上即使沒有過敏症狀，也建議立即就醫（可能造成腎臟損傷）</div>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">5</div>
+      <div class="step-text">密切觀察全身症狀至少 30 分鐘
+        <div class="step-sub">過敏性休克（Anaphylaxis）可能在螫傷後 5–30 分鐘內發作</div>
+      </div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">6</div>
+      <div class="step-text">出現任何全身症狀，立即前往急診
+        <div class="step-sub">切換「醫院導航」，找距離最近的醫院</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 過敏辨識 ══ -->
+<div class="panel" id="panel-know">
+  <!-- 輕度 -->
+  <div class="info-box" style="margin-bottom:10px;">
+    <div class="info-title"><i class="ti ti-circle-check" style="color:#27ae60"></i>輕度反應（局部）</div>
+    <div class="know-grid">
+      <div class="know-card">
+        <div class="know-card-title"><i class="ti ti-temperature-plus" style="color:#e65100"></i>局部紅腫熱痛</div>
+        <p>螫傷周圍紅腫，通常直徑小於 10cm，數小時後消退。屬正常反應。</p>
+      </div>
+      <div class="know-card">
+        <div class="know-card-title"><i class="ti ti-clock" style="color:#1a73e8"></i>消退時間</div>
+        <p>輕度腫脹 6–12 小時內消退，冰敷可加速緩解。</p>
+      </div>
+    </div>
+    <p style="font-size:12px;color:#8e8e93;margin-top:8px;">💡 輕度反應仍應持續觀察至少 30 分鐘，確認無全身症狀。</p>
+  </div>
+
+  <!-- 嚴重 -->
+  <div class="info-box" style="border-color:#f1948a;">
+    <div class="info-title"><i class="ti ti-alert-triangle" style="color:#c0392b"></i>嚴重反應——立即就醫</div>
+    <div class="know-grid">
+      <div class="know-card warn-card">
+        <div class="know-card-title"><i class="ti ti-lungs" style="color:#c0392b"></i>呼吸道反應</div>
+        <p>喉嚨緊縮、聲音沙啞、呼吸喘鳴、氣促。最危急，可致命。</p>
+      </div>
+      <div class="know-card warn-card">
+        <div class="know-card-title"><i class="ti ti-ripple" style="color:#c0392b"></i>皮膚全身反應</div>
+        <p>全身蕁麻疹、大範圍紅斑、眼皮/嘴唇/舌頭腫脹。</p>
+      </div>
+      <div class="know-card warn-card">
+        <div class="know-card-title"><i class="ti ti-heart-rate-monitor" style="color:#c0392b"></i>循環系統</div>
+        <p>血壓急降、心跳過速、臉色蒼白、四肢冰冷。過敏性休克前兆。</p>
+      </div>
+      <div class="know-card warn-card">
+        <div class="know-card-title"><i class="ti ti-urgent" style="color:#c0392b"></i>多處螫傷</div>
+        <p>10 針以上即需就醫；大量毒素可導致溶血、急性腎衰竭。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 高風險族群 -->
+  <div class="info-box">
+    <div class="info-title"><i class="ti ti-users" style="color:#e65100"></i>高風險族群需特別注意</div>
+    <ul class="alert-list" style="color:#3c3c43;">
+      <li><span class="dot" style="background:#e65100"></span>曾有蜂螫過敏史者（第二次可能更嚴重）</li>
+      <li><span class="dot" style="background:#e65100"></span>有氣喘、心臟病、高血壓的長者</li>
+      <li><span class="dot" style="background:#e65100"></span>嬰幼兒及孕婦</li>
+      <li><span class="dot" style="background:#e65100"></span>正在服用乙型阻斷劑的患者</li>
+    </ul>
+  </div>
+
+  <!-- 虎頭蜂 vs 蜜蜂 -->
+  <div class="info-box">
+    <div class="info-title"><i class="ti ti-bug" style="color:#e65100"></i>虎頭蜂 vs 蜜蜂：差異</div>
+    <div class="know-grid">
+      <div class="know-card">
+        <div class="know-card-title" style="color:#c0392b;">🐝 虎頭蜂</div>
+        <p>體型大、攻擊性強、毒液量多，可反覆螫刺，不留針。毒素含溶血成分，危險性高。</p>
+      </div>
+      <div class="know-card">
+        <div class="know-card-title" style="color:#e65100;">🍯 蜜蜂</div>
+        <p>螫後會留下毒針與毒囊，需刮除。單次毒液量少，但過敏者仍可能致命。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 醫院導航 ══ -->
+<div class="panel" id="panel-hosp">
+  <div class="loc-bar">
+    <div class="loc-row">
+      <i class="ti ti-map-pin" style="font-size:16px;color:#8e8e93;flex-shrink:0"></i>
+      <span id="loc-text">尚未取得定位</span>
+      <button class="gps-btn" id="gps-btn" onclick="getLocation()">
+        <i class="ti ti-current-location"></i>自動定位
+      </button>
+    </div>
+    <div class="manual-row">
+      <span class="manual-label"><i class="ti ti-map-2" style="font-size:13px;vertical-align:-1px"></i> 手動選擇</span>
+      <select id="town-select"></select>
+      <button class="manual-btn" onclick="applyManual()">確定</button>
+    </div>
+    <div id="loc-badge-wrap"></div>
+    <div id="perm-guide" class="perm-guide" style="display:none;">
+      <div class="perm-guide-title">📱 Chrome 如何開啟位置權限</div>
+      <ul class="perm-steps">
+        <li><span class="perm-step-num">1</span>點選網址列左側的 🔒 鎖頭圖示</li>
+        <li><span class="perm-step-num">2</span>選擇「網站設定」或「權限」</li>
+        <li><span class="perm-step-num">3</span>找到「位置」→ 改為「允許」</li>
+        <li><span class="perm-step-num">4</span>重新整理頁面後再按「自動定位」</li>
+      </ul>
+      <button class="perm-close-btn" onclick="document.getElementById('perm-guide').style.display='none'">我知道了，關閉</button>
+    </div>
+  </div>
+
+  <div class="search-wrap">
+    <i class="ti ti-search search-icon"></i>
+    <input id="search" type="text" placeholder="搜尋醫院名稱…" oninput="render()">
+  </div>
+  <p class="count-lbl" id="count-lbl"></p>
+  <div class="hosp-list" id="hosp-list"></div>
+</div>
+
+<script>
+function switchTab(t){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+  document.getElementById('panel-'+t).classList.add('active');
+}
+
+// ── 醫院資料 ──
+const hospitals=[
+  {name:"屏基醫療財團法人屏東基督教醫院", addr:"屏東市大連路60號",         lat:22.6821, lng:120.5026},
+  {name:"安泰醫療社團法人安泰醫院",       addr:"高雄市小港區學府路111號",   lat:22.5652, lng:120.3613},
+  {name:"輔英科技大學附設醫院",           addr:"屏東縣東港鎮中山路5號",     lat:22.4653, lng:120.4529},
+  {name:"寶建醫療社團法人寶建醫院",       addr:"屏東市中山路123號",         lat:22.6816, lng:120.4843},
+  {name:"枋寮醫療社團法人枋寮醫院",       addr:"屏東縣枋寮鄉中山路139號",   lat:22.3639, lng:120.5963},
+  {name:"衛生福利部屏東醫院",             addr:"屏東市自由路270號",         lat:22.6735, lng:120.4956},
+  {name:"國仁醫院",                       addr:"屏東市民生東路12-2號",       lat:22.6583, lng:120.5145},
+  {name:"安泰醫療社團法人潮州安泰醫院",   addr:"屏東縣潮州鎮四維路162號",   lat:22.5540, lng:120.5471},
+  {name:"衛生福利部恆春旅遊醫院",         addr:"屏東縣恆春鎮恆南路188號",   lat:21.9991, lng:120.7448},
+  {name:"南門醫療社團法人南門醫院",       addr:"屏東縣恆春鎮南門路10號",    lat:22.0009, lng:120.7454},
+  {name:"恆基醫療財團法人恆春基督教醫院", addr:"屏東縣恆春鎮恆西路21號",    lat:22.0024, lng:120.7411},
+  {name:"大新醫院",                       addr:"屏東縣高樹鄉興中路208號",   lat:22.8238, lng:120.5996},
+  {name:"屏東榮民總醫院龍泉分院",         addr:"屏東縣內埔鄉龍潭村安邦1巷1號", lat:22.6745, lng:120.5991},
+  {name:"國軍高雄總醫院屏東分院附設民眾診療服務處", addr:"屏東市大湖路58巷22號", lat:22.6337, lng:120.4875},
+  {name:"屏東榮民總醫院",                 addr:"屏東市榮總東路1號",         lat:22.6629, lng:120.4754},
+];
+
+// ── 定位 ──
+let userLat=null, userLng=null;
+
+function setBtn(state){
+  const btn=document.getElementById('gps-btn');
+  const map={
+    idle:   {html:'<i class="ti ti-current-location"></i>自動定位', dis:false, bg:'', col:''},
+    loading:{html:'<i class="ti ti-loader"></i>定位中…',            dis:true,  bg:'', col:''},
+    ok:     {html:'<i class="ti ti-check"></i>已定位',              dis:false, bg:'#d4edda', col:'#155724'},
+    retry:  {html:'<i class="ti ti-refresh"></i>重試',              dis:false, bg:'', col:''},
+  };
+  const s=map[state]||map.idle;
+  btn.innerHTML=s.html; btn.disabled=s.dis;
+  btn.style.background=s.bg; btn.style.color=s.col;
+}
+
+function getLocation(){
+  if(window!==window.top){
+    document.getElementById('loc-text').textContent='⚠️ 嵌入模式不支援定位，請手動選擇鄉鎮';
+    document.getElementById('perm-guide').innerHTML=`
+      <div class="perm-guide-title">⚠️ 頁面嵌入限制</div>
+      <p style="font-size:12px;color:#7d5a00;line-height:1.6;">此頁面目前嵌入在 Google Sites 中，瀏覽器安全限制會封鎖定位功能。<br><br>
+      <strong>解決方式：</strong>請直接用 Chrome 開啟本 HTML 檔案，或上傳至 GitHub Pages / Netlify 等平台後再開啟。</p>
+      <button class="perm-close-btn" style="margin-top:8px" onclick="document.getElementById('perm-guide').style.display='none'">關閉</button>`;
+    document.getElementById('perm-guide').style.display='block';
+    return;
+  }
+  if(!navigator.geolocation){
+    document.getElementById('loc-text').textContent='❌ 此裝置不支援定位，請手動選擇鄉鎮';
+    return;
+  }
+  setBtn('loading');
+  document.getElementById('loc-text').textContent='定位中，請稍候…';
+  document.getElementById('perm-guide').style.display='none';
+  document.getElementById('loc-badge-wrap').innerHTML='';
+
+  navigator.geolocation.getCurrentPosition(
+    onLocSuccess,
+    function(err){
+      navigator.geolocation.getCurrentPosition(
+        onLocSuccess,
+        function(err2){ onLocError(err2); },
+        {enableHighAccuracy:false, timeout:15000, maximumAge:60000}
+      );
+    },
+    {enableHighAccuracy:true, timeout:10000, maximumAge:0}
+  );
+}
+
+function onLocSuccess(pos){
+  userLat=pos.coords.latitude; userLng=pos.coords.longitude;
+  const acc=Math.round(pos.coords.accuracy);
+  document.getElementById('loc-text').textContent=`GPS ${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
+  document.getElementById('loc-badge-wrap').innerHTML=`<span class="loc-badge">✅ 已定位，精確度 ±${acc}m</span>`;
+  document.getElementById('town-select').value='';
+  document.getElementById('perm-guide').style.display='none';
+  setBtn('ok'); render();
+}
+
+function onLocError(err){
+  setBtn('retry');
+  const msgs={1:'❌ 位置權限被拒絕，請開啟後重試',2:'⚠️ 無法取得位置，請確認手機 GPS 已開啟',3:'⏱️ 定位逾時，請至空曠處或手動選擇鄉鎮'};
+  document.getElementById('loc-text').textContent=msgs[err.code]||'❌ 定位失敗，請手動選擇鄉鎮';
+  if(err.code===1) document.getElementById('perm-guide').style.display='block';
+}
+
+// ── 鄉鎮 ──
+const TOWNS=[
+  {name:'屏東市',lat:22.6724,lng:120.4874},{name:'潮州鎮',lat:22.5492,lng:120.5443},
+  {name:'東港鎮',lat:22.4656,lng:120.4504},{name:'恆春鎮',lat:22.0031,lng:120.7449},
+  {name:'萬丹鄉',lat:22.5897,lng:120.4881},{name:'長治鄉',lat:22.6842,lng:120.5297},
+  {name:'麟洛鄉',lat:22.6556,lng:120.5305},{name:'九如鄉',lat:22.7201,lng:120.4928},
+  {name:'里港鄉',lat:22.7775,lng:120.5002},{name:'鹽埔鄉',lat:22.7531,lng:120.5487},
+  {name:'高樹鄉',lat:22.8131,lng:120.5756},{name:'萬巒鄉',lat:22.6079,lng:120.5652},
+  {name:'內埔鄉',lat:22.6278,lng:120.5700},{name:'竹田鄉',lat:22.5773,lng:120.5300},
+  {name:'新埤鄉',lat:22.5139,lng:120.5615},{name:'枋寮鄉',lat:22.3635,lng:120.5977},
+  {name:'新園鄉',lat:22.5308,lng:120.4649},{name:'崁頂鄉',lat:22.5392,lng:120.5091},
+  {name:'林邊鄉',lat:22.4344,lng:120.5139},{name:'南州鄉',lat:22.4942,lng:120.5253},
+  {name:'佳冬鄉',lat:22.4261,lng:120.5744},{name:'琉球鄉',lat:22.3432,lng:120.3741},
+  {name:'車城鄉',lat:22.0651,lng:120.6968},{name:'滿州鄉',lat:22.0219,lng:120.8301},
+  {name:'枋山鄉',lat:22.2611,lng:120.6402},{name:'三地門鄉',lat:22.7169,lng:120.6380},
+  {name:'霧台鄉',lat:22.7082,lng:120.7328},{name:'瑪家鄉',lat:22.6731,lng:120.6406},
+  {name:'泰武鄉',lat:22.5795,lng:120.6444},{name:'來義鄉',lat:22.5016,lng:120.6393},
+  {name:'春日鄉',lat:22.3617,lng:120.6465},{name:'獅子鄉',lat:22.2151,lng:120.6940},
+  {name:'牡丹鄉',lat:22.0974,lng:120.7806},{name:'茂林區（高雄）',lat:22.8864,lng:120.6641},
+];
+(function(){
+  const sel=document.getElementById('town-select');
+  sel.innerHTML='<option value="">— 選擇鄉鎮區 —</option>';
+  TOWNS.forEach(t=>{const o=document.createElement('option');o.value=t.name;o.textContent=t.name;sel.appendChild(o);});
+})();
+
+function applyManual(){
+  const val=document.getElementById('town-select').value;
+  if(!val)return;
+  const t=TOWNS.find(t=>t.name===val); if(!t)return;
+  userLat=t.lat; userLng=t.lng;
+  document.getElementById('loc-text').textContent='手動：'+val;
+  document.getElementById('loc-badge-wrap').innerHTML=`<span class="loc-badge">📍 以 ${val} 中心點計算距離</span>`;
+  document.getElementById('perm-guide').style.display='none';
+  render();
+}
+
+// ── 距離 ──
+function deg2rad(d){return d*Math.PI/180;}
+function calcDist(la1,lo1,la2,lo2){
+  const R=6371,dL=deg2rad(la2-la1),dO=deg2rad(lo2-lo1);
+  const a=Math.sin(dL/2)**2+Math.cos(deg2rad(la1))*Math.cos(deg2rad(la2))*Math.sin(dO/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function mapsUrl(lat,lng){
+  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
+  return isIOS?`maps://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`:`https://maps.google.com/maps?daddr=${lat},${lng}&travelmode=driving`;
+}
+
+// ── 渲染 ──
+function render(){
+  const q=document.getElementById('search').value.trim().toLowerCase();
+  let list=hospitals.map((h,i)=>({...h,_i:i}));
+  if(q)list=list.filter(h=>h.name.toLowerCase().includes(q)||h.addr.toLowerCase().includes(q));
+  if(userLat!==null){
+    list=list.map(h=>({...h,_dist:calcDist(userLat,userLng,h.lat,h.lng)}));
+    list.sort((a,b)=>a._dist-b._dist);
+  }
+  const locSuffix=userLat?'・依距離排序':'';
+  document.getElementById('count-lbl').textContent=`共 ${list.length} 間醫院${locSuffix}`;
+  const el=document.getElementById('hosp-list');
+  if(!list.length){el.innerHTML='<div class="empty">找不到符合條件的醫院</div>';return;}
+  el.innerHTML=list.map(h=>{
+    const url=mapsUrl(h.lat,h.lng);
+    return `<div class="hosp-card">
+      <div class="hosp-top">
+        <div class="hosp-ico"><i class="ti ti-building-hospital"></i></div>
+        <div class="hosp-info">
+          <div class="hosp-name">${h.name}</div>
+          ${h.addr?`<div class="hosp-addr">${h.addr}</div>`:''}
+        </div>
+        <div class="hosp-right">
+          ${h._dist!==undefined?`<span class="dist">${h._dist<1?Math.round(h._dist*1000)+'m':h._dist.toFixed(1)+'km'}</span>`:''}
+          <a class="nav-link" href="${url}" target="_blank" rel="noopener">
+            <i class="ti ti-navigation"></i>導航
+          </a>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+render();
+</script>
+</body>
+</html>
