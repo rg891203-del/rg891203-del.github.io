@@ -249,6 +249,169 @@ async function doConvExcel(pages){
   convSetProgress(1,`✅ 完成！共 ${pages.length} 個工作表`);
 }
 
+
+/* ════════════════════════════════════
+   MERGE MODE
+════════════════════════════════════ */
+let mergeFiles=[], _mergeIdSeq=0;
+
+/* Drop zone */
+document.getElementById('mergeDrop').addEventListener('dragover',e=>{e.preventDefault();document.getElementById('mergeDrop').classList.add('over');});
+document.getElementById('mergeDrop').addEventListener('dragleave',()=>document.getElementById('mergeDrop').classList.remove('over'));
+document.getElementById('mergeDrop').addEventListener('drop',e=>{
+  e.preventDefault();document.getElementById('mergeDrop').classList.remove('over');
+  const files=[...e.dataTransfer.files].filter(f=>f.type==='application/pdf');
+  if(files.length)mergeAdd(files);
+  else showToast('⚠️ 請選擇 PDF 格式的檔案');
+});
+document.getElementById('mergeFileInput').addEventListener('change',e=>{mergeAdd([...e.target.files]);e.target.value='';});
+
+async function mergeAdd(files){
+  for(const file of files){
+    if(file.type!=='application/pdf'){showToast(`⚠️ ${file.name} 不是 PDF 格式`);continue;}
+    try{
+      const bytes=new Uint8Array(await file.arrayBuffer());
+      const doc=await pdfjsLib.getDocument({data:bytes.slice()}).promise;
+      const id=++_mergeIdSeq;
+      // Render first-page thumbnail (40 px wide)
+      let thumb='';
+      try{
+        const pg=await doc.getPage(1);
+        const vp0=pg.getViewport({scale:1});
+        const vp=pg.getViewport({scale:40/vp0.width});
+        const cv=document.createElement('canvas');
+        cv.width=vp.width;cv.height=vp.height;
+        await pg.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+        thumb=cv.toDataURL('image/jpeg',.75);
+      }catch(_){}
+      mergeFiles.push({id,name:file.name,bytes,pageCount:doc.numPages,thumb});
+    }catch(e){showToast(`❌ 無法讀取 ${file.name}`);}
+  }
+  renderMergeList();
+  if(mode==='merge')refreshAbar();
+}
+
+function mergeRemove(id){
+  mergeFiles=mergeFiles.filter(f=>f.id!==id);
+  renderMergeList();refreshAbar();
+}
+
+function mergeMove(id,delta){
+  const idx=mergeFiles.findIndex(f=>f.id===id);
+  if(idx<0)return;
+  const ni=idx+delta;
+  if(ni<0||ni>=mergeFiles.length)return;
+  [mergeFiles[idx],mergeFiles[ni]]=[mergeFiles[ni],mergeFiles[idx]];
+  renderMergeList();refreshAbar();
+}
+
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function renderMergeList(){
+  const list=document.getElementById('mergeList');if(!list)return;
+  if(!mergeFiles.length){list.innerHTML='';return;}
+  list.innerHTML=mergeFiles.map((f,i)=>`
+    <div class="merge-card">
+      <div class="merge-thumb">
+        ${f.thumb?`<img src="${f.thumb}" alt="">`:' <span class="merge-thumb-ico">📄</span>'}
+      </div>
+      <div class="merge-info">
+        <span class="merge-name" title="${escHtml(f.name)}">${escHtml(f.name)}</span>
+        <span class="merge-meta">${f.pageCount} 頁</span>
+      </div>
+      <div class="merge-btns">
+        <button class="mbtn" onclick="mergeMove(${f.id},-1)" ${i===0?'disabled':''} title="上移">↑</button>
+        <button class="mbtn" onclick="mergeMove(${f.id},+1)" ${i===mergeFiles.length-1?'disabled':''} title="下移">↓</button>
+        <button class="mbtn del-btn" onclick="mergeRemove(${f.id})" title="移除">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+async function doMerge(){
+  if(busy){showToast('請稍候…');return;}
+  if(mergeFiles.length<2){showModal('⚠️','需要至少 2 個 PDF','請加入至少 2 個 PDF 檔案後再合併');return;}
+  busy=true;
+  document.getElementById('mergeProgWrap')?.classList.remove('hidden');
+  try{
+    setMergeProg(0,'開始合併…');
+    const outDoc=await PDFDocument.create();
+    for(let i=0;i<mergeFiles.length;i++){
+      const mf=mergeFiles[i];
+      setMergeProg(i/mergeFiles.length,`正在合併「${mf.name}」(${i+1}/${mergeFiles.length})…`);
+      const src=await PDFDocument.load(mf.bytes,{ignoreEncryption:true});
+      const idx=Array.from({length:mf.pageCount},(_,j)=>j);
+      const copied=await outDoc.copyPages(src,idx);
+      copied.forEach(p=>outDoc.addPage(p));
+    }
+    setMergeProg(.95,'儲存 PDF…');
+    const outBytes=await outDoc.save();
+    const blob=new Blob([outBytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const baseName=mergeFiles[0].name.replace(/\.pdf$/i,'');
+    const a=Object.assign(document.createElement('a'),{href:url,download:baseName+'_merged.pdf'});
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),8000);
+    const total=mergeFiles.reduce((s,f)=>s+f.pageCount,0);
+    setMergeProg(1,`✅ 完成！共 ${mergeFiles.length} 個 PDF，${total} 頁`);
+    showModal('✅','合併完成',`已成功合併 ${mergeFiles.length} 個 PDF\n新 PDF 共 ${total} 頁，已開始下載`);
+  }catch(e){
+    showModal('❌','合併失敗',e.message||'請重試');
+    setMergeProg(0,'');
+  }
+  busy=false;
+}
+
+function setMergeProg(pct,lbl){
+  const f=document.getElementById('mergeProgFill'),l=document.getElementById('mergeProgLbl'),w=document.getElementById('mergeProgWrap');
+  if(w)w.classList.remove('hidden');
+  if(f)f.style.width=Math.round(pct*100)+'%';
+  if(l)l.textContent=lbl;
+}
+
+
+/* ════════════════════════════════════
+   EXTRACT PAGES
+════════════════════════════════════ */
+async function extractPages(){
+  if(busy){showToast('請稍候…');return;}
+  if(!deletedPages.size){showModal('⚠️','未選取頁面','請先點選要提取的頁面');return;}
+
+  busy=true;
+  const exBtn=document.getElementById('extractBtn');
+  if(exBtn){exBtn.disabled=true;exBtn.textContent='⏳ 處理中…';}
+
+  // Pages to extract = selected pages, preserved in current display order
+  const toExtract=pageOrder.filter(p=>deletedPages.has(p));
+
+  try{
+    const srcDoc=await PDFDocument.load(curBytes,{ignoreEncryption:true});
+    const outDoc=await PDFDocument.create();
+    for(const origPage of toExtract){
+      const[pg]=await outDoc.copyPages(srcDoc,[origPage-1]);
+      outDoc.addPage(pg);
+    }
+    const newBytes=await outDoc.save();
+    const blob=new Blob([newBytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const a=Object.assign(document.createElement('a'),{
+      href:url,
+      download:fileName.replace(/\.pdf$/i,'')+'_extracted.pdf'
+    });
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),8000);
+
+    // Offer to load the extracted PDF for further editing
+    showModal('✅','提取完成',
+      `已提取 ${toExtract.length} 頁，儲存為新 PDF 並開始下載。`);
+
+  }catch(e){
+    showModal('❌','提取失敗',e.message||'請重試');
+  }
+
+  busy=false;
+  if(exBtn){exBtn.disabled=false;exBtn.textContent='✂️ 提取所選';}
+}
+
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js">
 /* ════════════════════════════════════
@@ -494,6 +657,169 @@ async function doConvExcel(pages){
   convSetProgress(1,`✅ 完成！共 ${pages.length} 個工作表`);
 }
 
+
+/* ════════════════════════════════════
+   MERGE MODE
+════════════════════════════════════ */
+let mergeFiles=[], _mergeIdSeq=0;
+
+/* Drop zone */
+document.getElementById('mergeDrop').addEventListener('dragover',e=>{e.preventDefault();document.getElementById('mergeDrop').classList.add('over');});
+document.getElementById('mergeDrop').addEventListener('dragleave',()=>document.getElementById('mergeDrop').classList.remove('over'));
+document.getElementById('mergeDrop').addEventListener('drop',e=>{
+  e.preventDefault();document.getElementById('mergeDrop').classList.remove('over');
+  const files=[...e.dataTransfer.files].filter(f=>f.type==='application/pdf');
+  if(files.length)mergeAdd(files);
+  else showToast('⚠️ 請選擇 PDF 格式的檔案');
+});
+document.getElementById('mergeFileInput').addEventListener('change',e=>{mergeAdd([...e.target.files]);e.target.value='';});
+
+async function mergeAdd(files){
+  for(const file of files){
+    if(file.type!=='application/pdf'){showToast(`⚠️ ${file.name} 不是 PDF 格式`);continue;}
+    try{
+      const bytes=new Uint8Array(await file.arrayBuffer());
+      const doc=await pdfjsLib.getDocument({data:bytes.slice()}).promise;
+      const id=++_mergeIdSeq;
+      // Render first-page thumbnail (40 px wide)
+      let thumb='';
+      try{
+        const pg=await doc.getPage(1);
+        const vp0=pg.getViewport({scale:1});
+        const vp=pg.getViewport({scale:40/vp0.width});
+        const cv=document.createElement('canvas');
+        cv.width=vp.width;cv.height=vp.height;
+        await pg.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+        thumb=cv.toDataURL('image/jpeg',.75);
+      }catch(_){}
+      mergeFiles.push({id,name:file.name,bytes,pageCount:doc.numPages,thumb});
+    }catch(e){showToast(`❌ 無法讀取 ${file.name}`);}
+  }
+  renderMergeList();
+  if(mode==='merge')refreshAbar();
+}
+
+function mergeRemove(id){
+  mergeFiles=mergeFiles.filter(f=>f.id!==id);
+  renderMergeList();refreshAbar();
+}
+
+function mergeMove(id,delta){
+  const idx=mergeFiles.findIndex(f=>f.id===id);
+  if(idx<0)return;
+  const ni=idx+delta;
+  if(ni<0||ni>=mergeFiles.length)return;
+  [mergeFiles[idx],mergeFiles[ni]]=[mergeFiles[ni],mergeFiles[idx]];
+  renderMergeList();refreshAbar();
+}
+
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function renderMergeList(){
+  const list=document.getElementById('mergeList');if(!list)return;
+  if(!mergeFiles.length){list.innerHTML='';return;}
+  list.innerHTML=mergeFiles.map((f,i)=>`
+    <div class="merge-card">
+      <div class="merge-thumb">
+        ${f.thumb?`<img src="${f.thumb}" alt="">`:' <span class="merge-thumb-ico">📄</span>'}
+      </div>
+      <div class="merge-info">
+        <span class="merge-name" title="${escHtml(f.name)}">${escHtml(f.name)}</span>
+        <span class="merge-meta">${f.pageCount} 頁</span>
+      </div>
+      <div class="merge-btns">
+        <button class="mbtn" onclick="mergeMove(${f.id},-1)" ${i===0?'disabled':''} title="上移">↑</button>
+        <button class="mbtn" onclick="mergeMove(${f.id},+1)" ${i===mergeFiles.length-1?'disabled':''} title="下移">↓</button>
+        <button class="mbtn del-btn" onclick="mergeRemove(${f.id})" title="移除">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+async function doMerge(){
+  if(busy){showToast('請稍候…');return;}
+  if(mergeFiles.length<2){showModal('⚠️','需要至少 2 個 PDF','請加入至少 2 個 PDF 檔案後再合併');return;}
+  busy=true;
+  document.getElementById('mergeProgWrap')?.classList.remove('hidden');
+  try{
+    setMergeProg(0,'開始合併…');
+    const outDoc=await PDFDocument.create();
+    for(let i=0;i<mergeFiles.length;i++){
+      const mf=mergeFiles[i];
+      setMergeProg(i/mergeFiles.length,`正在合併「${mf.name}」(${i+1}/${mergeFiles.length})…`);
+      const src=await PDFDocument.load(mf.bytes,{ignoreEncryption:true});
+      const idx=Array.from({length:mf.pageCount},(_,j)=>j);
+      const copied=await outDoc.copyPages(src,idx);
+      copied.forEach(p=>outDoc.addPage(p));
+    }
+    setMergeProg(.95,'儲存 PDF…');
+    const outBytes=await outDoc.save();
+    const blob=new Blob([outBytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const baseName=mergeFiles[0].name.replace(/\.pdf$/i,'');
+    const a=Object.assign(document.createElement('a'),{href:url,download:baseName+'_merged.pdf'});
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),8000);
+    const total=mergeFiles.reduce((s,f)=>s+f.pageCount,0);
+    setMergeProg(1,`✅ 完成！共 ${mergeFiles.length} 個 PDF，${total} 頁`);
+    showModal('✅','合併完成',`已成功合併 ${mergeFiles.length} 個 PDF\n新 PDF 共 ${total} 頁，已開始下載`);
+  }catch(e){
+    showModal('❌','合併失敗',e.message||'請重試');
+    setMergeProg(0,'');
+  }
+  busy=false;
+}
+
+function setMergeProg(pct,lbl){
+  const f=document.getElementById('mergeProgFill'),l=document.getElementById('mergeProgLbl'),w=document.getElementById('mergeProgWrap');
+  if(w)w.classList.remove('hidden');
+  if(f)f.style.width=Math.round(pct*100)+'%';
+  if(l)l.textContent=lbl;
+}
+
+
+/* ════════════════════════════════════
+   EXTRACT PAGES
+════════════════════════════════════ */
+async function extractPages(){
+  if(busy){showToast('請稍候…');return;}
+  if(!deletedPages.size){showModal('⚠️','未選取頁面','請先點選要提取的頁面');return;}
+
+  busy=true;
+  const exBtn=document.getElementById('extractBtn');
+  if(exBtn){exBtn.disabled=true;exBtn.textContent='⏳ 處理中…';}
+
+  // Pages to extract = selected pages, preserved in current display order
+  const toExtract=pageOrder.filter(p=>deletedPages.has(p));
+
+  try{
+    const srcDoc=await PDFDocument.load(curBytes,{ignoreEncryption:true});
+    const outDoc=await PDFDocument.create();
+    for(const origPage of toExtract){
+      const[pg]=await outDoc.copyPages(srcDoc,[origPage-1]);
+      outDoc.addPage(pg);
+    }
+    const newBytes=await outDoc.save();
+    const blob=new Blob([newBytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const a=Object.assign(document.createElement('a'),{
+      href:url,
+      download:fileName.replace(/\.pdf$/i,'')+'_extracted.pdf'
+    });
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),8000);
+
+    // Offer to load the extracted PDF for further editing
+    showModal('✅','提取完成',
+      `已提取 ${toExtract.length} 頁，儲存為新 PDF 並開始下載。`);
+
+  }catch(e){
+    showModal('❌','提取失敗',e.message||'請重試');
+  }
+
+  busy=false;
+  if(exBtn){exBtn.disabled=false;exBtn.textContent='✂️ 提取所選';}
+}
+
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -534,7 +860,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .drop-zone p{font-size:.85rem;color:var(--ink2);margin-bottom:22px}
 
 /* ─── MODE TABS ─── */
-.mode-tabs{display:flex;background:var(--surf);border-bottom:1px solid var(--border);box-shadow:var(--s1)}
+.mode-tabs{display:flex;background:var(--surf);border-bottom:1px solid var(--border);box-shadow:var(--s1);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .mode-tab{flex:1;padding:11px 4px;border:none;border-bottom:3px solid transparent;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--ink2);background:transparent;transition:all .15s;-webkit-tap-highlight-color:transparent;white-space:nowrap}
 .mode-tab.active{color:var(--acc);border-bottom-color:var(--acc);background:var(--acc-dim)}
 .mode-tab:hover:not(.active){background:var(--bg)}
@@ -700,6 +1026,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .conv-prog-bar{height:7px;background:var(--bg);border-radius:99px;overflow:hidden;margin-bottom:5px}
 .conv-prog-fill{height:100%;background:var(--acc);border-radius:99px;width:0%;transition:width .2s}
 .conv-prog-lbl{font-size:.74rem;color:var(--ink2)}
+
+/* ─── MERGE PANEL ─── */
+.merge-panel{padding:14px;background:var(--surf);border-bottom:1px solid var(--border)}
+.merge-drop{border:2px dashed var(--border);border-radius:var(--r);padding:18px 16px;text-align:center;cursor:pointer;transition:all .18s;background:var(--bg);margin-bottom:12px}
+.merge-drop:hover,.merge-drop.over{border-color:var(--acc);background:var(--acc-dim)}
+.merge-drop-ico{font-size:2rem;display:block;margin-bottom:8px}
+.merge-drop p{font-size:.83rem;color:var(--ink2);margin-bottom:10px}
+.merge-list{display:flex;flex-direction:column;gap:7px;margin-bottom:8px}
+.merge-card{display:flex;align-items:center;gap:9px;background:var(--surf);border:1.5px solid var(--border);border-radius:10px;padding:9px 11px}
+.merge-thumb{width:34px;flex-shrink:0;border-radius:3px;overflow:hidden;background:#dde3ec;display:flex;align-items:center;justify-content:center;min-height:46px}
+.merge-thumb img{width:100%;display:block}
+.merge-thumb-ico{font-size:1.2rem;padding:4px 0}
+.merge-info{flex:1;min-width:0}
+.merge-name{font-size:.8rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.merge-meta{font-size:.7rem;color:var(--ink2);margin-top:2px;display:block}
+.merge-btns{display:flex;gap:3px;flex-shrink:0}
+.mbtn{width:28px;height:28px;border:1.5px solid var(--border);border-radius:6px;background:transparent;cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center;transition:all .15s;-webkit-tap-highlight-color:transparent;color:var(--ink2)}
+.mbtn:hover{background:var(--bg);border-color:var(--ink3)}
+.mbtn.del-btn:hover{background:var(--del-dim);border-color:var(--del);color:var(--del)}
+.mbtn[disabled]{opacity:.3;cursor:not-allowed;pointer-events:none}
 </style>
 </head>
 <body>
@@ -730,6 +1076,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <button class="mode-tab"        id="tab-sort"   onclick="setMode('sort')">🔀 排序</button>
     <button class="mode-tab"        id="tab-markup" onclick="setMode('markup')">🖊️ 標記</button>
     <button class="mode-tab"        id="tab-conv"   onclick="setMode('convert')">🔄 轉換</button>
+    <button class="mode-tab" id="tab-merge" onclick="setMode('merge')">🔗 合併</button>
   </div>
 
   <!-- Conversion panel (convert mode) -->
@@ -762,6 +1109,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <div class="conv-prog-lbl" id="convProgLbl">準備中…</div>
     </div>
   </div>
+
+  <!-- Merge panel -->
+  <div id="mergePanel" class="merge-panel hidden">
+    <div class="merge-drop" id="mergeDrop" onclick="mergeFileInput.click()">
+      <span class="merge-drop-ico">📎</span>
+      <p>拖曳多個 PDF 至此，或點擊選擇</p>
+      <button class="btn btn-acc btn-sm" onclick="event.stopPropagation();mergeFileInput.click()">+ 加入 PDF 檔案</button>
+    </div>
+    <input type="file" id="mergeFileInput" accept="application/pdf" multiple style="display:none">
+    <div id="mergeList" class="merge-list"></div>
+    <div class="conv-prog-wrap hidden" id="mergeProgWrap">
+      <div class="conv-prog-bar"><div class="conv-prog-fill" id="mergeProgFill"></div></div>
+      <div class="conv-prog-lbl" id="mergeProgLbl"></div>
+    </div>
+  </div>
   <div class="hint-bar hint-sort" id="sortHint">⠿ 點住縮圖並拖曳以調整順序</div>
   <div class="hint-bar hint-mark" id="markHint">🖊️ 點選縮圖開啟放大編輯器，加入圖形或文字</div>
   <div class="gtb">
@@ -771,7 +1133,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     </div>
     <div class="gtb-r" id="toolbarR"></div>
   </div>
-  <div class="pages-wrap">
+  <div class="pages-wrap" id="pagesWrap">
     <div class="pages-grid" id="pagesGrid"></div>
   </div>
   <div class="abar">
@@ -779,7 +1141,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <span class="abar-count" id="abarCount" style="color:var(--ink3)">尚無變更</span>
       <span class="abar-hint"  id="abarHint">編輯後點擊下載</span>
     </div>
-    <button class="btn btn-grn" id="dlBtn" onclick="downloadPDF()">⬇️ 下載 PDF</button>
+    <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
+      <button class="btn btn-sm hidden" id="extractBtn" onclick="extractPages()" style="background:var(--acc);color:#fff">✂️ 提取所選</button>
+      <button class="btn btn-grn" id="dlBtn" onclick="downloadPDF()">⬇️ 下載 PDF</button>
+    </div>
   </div>
 </div>
 
@@ -969,15 +1334,15 @@ async function renderThumb(origPage){
 ════════════════════════════════════ */
 function setMode(m){
   mode=m;
-  ['delete','sort','markup','conv'].forEach(id=>{
-    const el=document.getElementById('tab-'+(id==='conv'?'conv':id));
-    el?.classList.toggle('active',id===m||(id==='conv'&&m==='convert'));
+  ['delete','sort','markup','conv','merge'].forEach(id=>{
+    const el=document.getElementById(id==='conv'?'tab-conv':id==='merge'?'tab-merge':'tab-'+id);
+    el?.classList.toggle('active',(id==='conv'&&m==='convert')||(id==='merge'&&m==='merge')||(m===id));
   });
-  document.getElementById('tab-conv')?.classList.toggle('active',m==='convert');
-  ['delete','sort','markup'].forEach(id=>document.getElementById('tab-'+id)?.classList.toggle('active',id===m));
   document.getElementById('sortHint').classList.toggle('on',m==='sort');
   document.getElementById('markHint').classList.toggle('on',m==='markup');
   document.getElementById('convPanel').classList.toggle('hidden',m!=='convert');
+  document.getElementById('mergePanel').classList.toggle('hidden',m!=='merge');
+  document.getElementById('pagesWrap')?.classList.toggle('hidden',m==='merge');
   document.getElementById('pagesGrid').classList.toggle('sort-mode',m==='sort');
   document.getElementById('pagesGrid').classList.toggle('mk-mode',m==='markup');
   const r=document.getElementById('toolbarR');
@@ -985,13 +1350,10 @@ function setMode(m){
   else if(m==='sort')r.innerHTML=`<button class="btn btn-ghost btn-sm" onclick="resetOrder()">↺ 重置</button><button class="btn btn-ghost btn-sm" onclick="resetApp()">換檔</button>`;
   else if(m==='markup')r.innerHTML=`<button class="btn btn-ghost btn-sm" onclick="clearAllMarkup()">🗑 清除全部</button><button class="btn btn-ghost btn-sm" onclick="resetApp()">換檔</button>`;
   else r.innerHTML=`<button class="btn btn-ghost btn-sm" onclick="resetApp()">換檔</button>`;
-  if(m==='convert'){convInitPanel();}
+  if(m==='convert')convInitPanel();
   refreshAbar();
 }
 
-/* ════════════════════════════════════
-   DELETE MODE
-════════════════════════════════════ */
 function toggleDel(p,c){deletedPages.has(p)?deletedPages.delete(p):deletedPages.add(p);c.classList.toggle('del-sel',deletedPages.has(p));refreshAbar();}
 function invertSel(){pageOrder.forEach(p=>{deletedPages.has(p)?deletedPages.delete(p):deletedPages.add(p);document.getElementById('pc'+p)?.classList.toggle('del-sel',deletedPages.has(p));});refreshAbar();}
 function clearDel(){deletedPages.clear();pageOrder.forEach(p=>document.getElementById('pc'+p)?.classList.remove('del-sel'));refreshAbar();}
@@ -1357,16 +1719,29 @@ function refreshAbar(){
     btn.textContent='🔄 開始轉換';btn.className='btn btn-acc';btn.onclick=startConversion;btn.disabled=false;
     return;
   }
-  // Restore button for non-convert modes
+  if(mode==='merge'){
+    const n=mergeFiles.length,totalPg=mergeFiles.reduce((s,f)=>s+f.pageCount,0);
+    cEl.textContent=n?`${n} 個 PDF，共 ${totalPg} 頁`:'尚未加入任何 PDF';
+    cEl.style.color=n>=2?'var(--grn)':'var(--ink3)';
+    hEl.textContent=n>=2?`合併後共 ${totalPg} 頁`:n===1?'再加入至少 1 個 PDF':'請加入至少 2 個 PDF';
+    btn.textContent='🔗 合併並下載';btn.className='btn btn-acc';btn.onclick=doMerge;btn.disabled=n<2;
+    return;
+  }
   btn.textContent='⬇️ 下載 PDF';btn.className='btn btn-grn';btn.onclick=downloadPDF;
+  // Extract button: show only in delete mode with ≥1 page selected
+  const exBtn=document.getElementById('extractBtn');
+  if(exBtn){exBtn.classList.toggle('hidden',!(mode==='delete'&&deletedPages.size>0));}
   const delN=deletedPages.size,reorder=pageOrder.some((p,i)=>p!==i+1);
   const hasMk=Object.values(pageShapes).some(a=>a.length>0);
   const remain=pageOrder.filter(p=>!deletedPages.has(p)).length,allGone=remain===0&&totalPages>0;
   const parts=[];if(delN>0)parts.push(`刪除 ${delN} 頁`);if(reorder)parts.push('重新排序');if(hasMk)parts.push('加入標記');
   if(allGone){cEl.textContent='⚠️ 所有頁面已標記刪除';cEl.style.color='var(--warn)';hEl.textContent='請至少保留一頁';btn.disabled=true;}
-  else if(!parts.length){cEl.textContent='尚無變更';cEl.style.color='var(--ink3)';hEl.textContent={delete:'點選縮圖以標記刪除',sort:'拖曳縮圖以調整順序',markup:'點選縮圖以開啟標記編輯'}[mode]||'';btn.disabled=false;}
-  else{cEl.textContent=parts.join(' · ');cEl.style.color='var(--grn)';hEl.textContent=`下載後將保留 ${remain} 頁`;btn.disabled=false;}
+  else if(!parts.length){cEl.textContent='尚無變更';cEl.style.color='var(--ink3)';hEl.textContent={delete:'點選縮圖以選取頁面（可刪除或提取）',sort:'拖曳縮圖以調整順序',markup:'點選縮圖以開啟標記編輯'}[mode]||'';btn.disabled=false;}
+  else{cEl.textContent=parts.join(' · ');cEl.style.color='var(--grn)';hEl.textContent=`刪除：保留 ${remain} 頁 ／ 提取：保留 ${delN} 頁`;btn.disabled=false;
+  const exBtn2=document.getElementById('extractBtn');
+  if(exBtn2)exBtn2.classList.toggle('hidden',!(mode==='delete'&&delN>0));}
 }
+
 
 /* ════════════════════════════════════
    DOWNLOAD
@@ -1693,6 +2068,169 @@ async function doConvExcel(pages){
   const arr=XLSX.write(wb,{type:'array',bookType:'xlsx'});
   dlBlob(new Blob([arr],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),convBaseName()+'.xlsx');
   convSetProgress(1,`✅ 完成！共 ${pages.length} 個工作表`);
+}
+
+
+/* ════════════════════════════════════
+   MERGE MODE
+════════════════════════════════════ */
+let mergeFiles=[], _mergeIdSeq=0;
+
+/* Drop zone */
+document.getElementById('mergeDrop').addEventListener('dragover',e=>{e.preventDefault();document.getElementById('mergeDrop').classList.add('over');});
+document.getElementById('mergeDrop').addEventListener('dragleave',()=>document.getElementById('mergeDrop').classList.remove('over'));
+document.getElementById('mergeDrop').addEventListener('drop',e=>{
+  e.preventDefault();document.getElementById('mergeDrop').classList.remove('over');
+  const files=[...e.dataTransfer.files].filter(f=>f.type==='application/pdf');
+  if(files.length)mergeAdd(files);
+  else showToast('⚠️ 請選擇 PDF 格式的檔案');
+});
+document.getElementById('mergeFileInput').addEventListener('change',e=>{mergeAdd([...e.target.files]);e.target.value='';});
+
+async function mergeAdd(files){
+  for(const file of files){
+    if(file.type!=='application/pdf'){showToast(`⚠️ ${file.name} 不是 PDF 格式`);continue;}
+    try{
+      const bytes=new Uint8Array(await file.arrayBuffer());
+      const doc=await pdfjsLib.getDocument({data:bytes.slice()}).promise;
+      const id=++_mergeIdSeq;
+      // Render first-page thumbnail (40 px wide)
+      let thumb='';
+      try{
+        const pg=await doc.getPage(1);
+        const vp0=pg.getViewport({scale:1});
+        const vp=pg.getViewport({scale:40/vp0.width});
+        const cv=document.createElement('canvas');
+        cv.width=vp.width;cv.height=vp.height;
+        await pg.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+        thumb=cv.toDataURL('image/jpeg',.75);
+      }catch(_){}
+      mergeFiles.push({id,name:file.name,bytes,pageCount:doc.numPages,thumb});
+    }catch(e){showToast(`❌ 無法讀取 ${file.name}`);}
+  }
+  renderMergeList();
+  if(mode==='merge')refreshAbar();
+}
+
+function mergeRemove(id){
+  mergeFiles=mergeFiles.filter(f=>f.id!==id);
+  renderMergeList();refreshAbar();
+}
+
+function mergeMove(id,delta){
+  const idx=mergeFiles.findIndex(f=>f.id===id);
+  if(idx<0)return;
+  const ni=idx+delta;
+  if(ni<0||ni>=mergeFiles.length)return;
+  [mergeFiles[idx],mergeFiles[ni]]=[mergeFiles[ni],mergeFiles[idx]];
+  renderMergeList();refreshAbar();
+}
+
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function renderMergeList(){
+  const list=document.getElementById('mergeList');if(!list)return;
+  if(!mergeFiles.length){list.innerHTML='';return;}
+  list.innerHTML=mergeFiles.map((f,i)=>`
+    <div class="merge-card">
+      <div class="merge-thumb">
+        ${f.thumb?`<img src="${f.thumb}" alt="">`:' <span class="merge-thumb-ico">📄</span>'}
+      </div>
+      <div class="merge-info">
+        <span class="merge-name" title="${escHtml(f.name)}">${escHtml(f.name)}</span>
+        <span class="merge-meta">${f.pageCount} 頁</span>
+      </div>
+      <div class="merge-btns">
+        <button class="mbtn" onclick="mergeMove(${f.id},-1)" ${i===0?'disabled':''} title="上移">↑</button>
+        <button class="mbtn" onclick="mergeMove(${f.id},+1)" ${i===mergeFiles.length-1?'disabled':''} title="下移">↓</button>
+        <button class="mbtn del-btn" onclick="mergeRemove(${f.id})" title="移除">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+async function doMerge(){
+  if(busy){showToast('請稍候…');return;}
+  if(mergeFiles.length<2){showModal('⚠️','需要至少 2 個 PDF','請加入至少 2 個 PDF 檔案後再合併');return;}
+  busy=true;
+  document.getElementById('mergeProgWrap')?.classList.remove('hidden');
+  try{
+    setMergeProg(0,'開始合併…');
+    const outDoc=await PDFDocument.create();
+    for(let i=0;i<mergeFiles.length;i++){
+      const mf=mergeFiles[i];
+      setMergeProg(i/mergeFiles.length,`正在合併「${mf.name}」(${i+1}/${mergeFiles.length})…`);
+      const src=await PDFDocument.load(mf.bytes,{ignoreEncryption:true});
+      const idx=Array.from({length:mf.pageCount},(_,j)=>j);
+      const copied=await outDoc.copyPages(src,idx);
+      copied.forEach(p=>outDoc.addPage(p));
+    }
+    setMergeProg(.95,'儲存 PDF…');
+    const outBytes=await outDoc.save();
+    const blob=new Blob([outBytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const baseName=mergeFiles[0].name.replace(/\.pdf$/i,'');
+    const a=Object.assign(document.createElement('a'),{href:url,download:baseName+'_merged.pdf'});
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),8000);
+    const total=mergeFiles.reduce((s,f)=>s+f.pageCount,0);
+    setMergeProg(1,`✅ 完成！共 ${mergeFiles.length} 個 PDF，${total} 頁`);
+    showModal('✅','合併完成',`已成功合併 ${mergeFiles.length} 個 PDF\n新 PDF 共 ${total} 頁，已開始下載`);
+  }catch(e){
+    showModal('❌','合併失敗',e.message||'請重試');
+    setMergeProg(0,'');
+  }
+  busy=false;
+}
+
+function setMergeProg(pct,lbl){
+  const f=document.getElementById('mergeProgFill'),l=document.getElementById('mergeProgLbl'),w=document.getElementById('mergeProgWrap');
+  if(w)w.classList.remove('hidden');
+  if(f)f.style.width=Math.round(pct*100)+'%';
+  if(l)l.textContent=lbl;
+}
+
+
+/* ════════════════════════════════════
+   EXTRACT PAGES
+════════════════════════════════════ */
+async function extractPages(){
+  if(busy){showToast('請稍候…');return;}
+  if(!deletedPages.size){showModal('⚠️','未選取頁面','請先點選要提取的頁面');return;}
+
+  busy=true;
+  const exBtn=document.getElementById('extractBtn');
+  if(exBtn){exBtn.disabled=true;exBtn.textContent='⏳ 處理中…';}
+
+  // Pages to extract = selected pages, preserved in current display order
+  const toExtract=pageOrder.filter(p=>deletedPages.has(p));
+
+  try{
+    const srcDoc=await PDFDocument.load(curBytes,{ignoreEncryption:true});
+    const outDoc=await PDFDocument.create();
+    for(const origPage of toExtract){
+      const[pg]=await outDoc.copyPages(srcDoc,[origPage-1]);
+      outDoc.addPage(pg);
+    }
+    const newBytes=await outDoc.save();
+    const blob=new Blob([newBytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const a=Object.assign(document.createElement('a'),{
+      href:url,
+      download:fileName.replace(/\.pdf$/i,'')+'_extracted.pdf'
+    });
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),8000);
+
+    // Offer to load the extracted PDF for further editing
+    showModal('✅','提取完成',
+      `已提取 ${toExtract.length} 頁，儲存為新 PDF 並開始下載。`);
+
+  }catch(e){
+    showModal('❌','提取失敗',e.message||'請重試');
+  }
+
+  busy=false;
+  if(exBtn){exBtn.disabled=false;exBtn.textContent='✂️ 提取所選';}
 }
 
 </script>
